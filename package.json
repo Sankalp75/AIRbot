@@ -21,6 +21,7 @@
   "homepage": "https://github.com/Sankalp75/AIRbot#readme",
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@distube/ytdl-core": "^4.16.12",
     "discord.js": "^14.27.0",
     "dotenv": "^17.4.2",
     "libsodium-wrappers": "^0.8.4",

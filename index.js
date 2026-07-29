@@ -1,5 +1,6 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
+const { Client, GatewayIntentBits } = require('discord.js');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
+const { spawn } = require('child_process');
 const play = require('play-dl');
 require('dotenv').config();
 
@@ -8,6 +9,7 @@ const player = createAudioPlayer();
 let connection = null;
 let queue = [];
 let isPlaying = false;
+let currentProcess = null;
 
 const songs = require('./songs');
 
@@ -19,35 +21,52 @@ function shuffle(arr) {
   return arr;
 }
 
-async function playNext() {
-  if (queue.length === 0) {
-    queue.push(...shuffle([...songs]));
+function killProcess() {
+  if (currentProcess) {
+    try { currentProcess.yt.kill(); } catch {}
+    try { currentProcess.ffmpeg.kill(); } catch {}
+    currentProcess = null;
   }
+}
+
+async function playNext() {
+  if (queue.length === 0) queue.push(...shuffle([...songs]));
   const title = queue.shift();
   try {
     const results = await play.search(title, { limit: 1 });
     if (!results.length) return playNext();
-    const stream = await play.stream(results[0].url);
-    const resource = createAudioResource(stream.stream, { inputType: stream.type });
+    const url = results[0].url;
+    killProcess();
+    const yt = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-warnings', url], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const ffmpeg = spawn('ffmpeg', ['-i', 'pipe:0', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'], { stdio: ['pipe', 'pipe', 'ignore'] });
+    yt.stdout.pipe(ffmpeg.stdin);
+    currentProcess = { yt, ffmpeg };
+    const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw });
     player.play(resource);
     isPlaying = true;
     console.log(`Playing: ${title}`);
+    yt.on('error', () => {});
+    ffmpeg.on('error', () => {});
   } catch (e) {
-    console.error(`Failed to play: ${title}`, e.message);
+    console.error(`Failed: ${title} - ${e.message}`);
     playNext();
   }
 }
 
 player.on(AudioPlayerStatus.Idle, () => {
   isPlaying = false;
+  killProcess();
   playNext();
 });
 
-player.on('error', () => playNext());
+player.on('error', () => {
+  killProcess();
+  playNext();
+});
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
-  client.user.setActivity('Hindi hits 🎵', { type: 2 });
+  client.user.setActivity('Hindi hits', { type: 2 });
 });
 
 client.on('messageCreate', async (msg) => {
@@ -86,6 +105,7 @@ client.on('messageCreate', async (msg) => {
   if (cmd === '!stop' || cmd === '!leave') {
     if (!connection) return msg.reply('Not in a voice channel.');
     player.stop();
+    killProcess();
     connection.destroy();
     connection = null;
     queue = [];
