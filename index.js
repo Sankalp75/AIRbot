@@ -39,6 +39,8 @@ async function playNext() {
     killProcess();
     const yt = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-warnings', url], { stdio: ['ignore', 'pipe', 'ignore'] });
     const ffmpeg = spawn('ffmpeg', ['-i', 'pipe:0', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'], { stdio: ['pipe', 'pipe', 'ignore'] });
+    yt.stdout.on('error', () => {});
+    ffmpeg.stdin.on('error', () => {});
     yt.stdout.pipe(ffmpeg.stdin);
     currentProcess = { yt, ffmpeg };
     ffmpeg.stdout.on('error', () => {});
