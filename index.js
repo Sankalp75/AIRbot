@@ -41,6 +41,7 @@ async function playNext() {
     const ffmpeg = spawn('ffmpeg', ['-i', 'pipe:0', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'], { stdio: ['pipe', 'pipe', 'ignore'] });
     yt.stdout.pipe(ffmpeg.stdin);
     currentProcess = { yt, ffmpeg };
+    ffmpeg.stdout.on('error', () => {});
     const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw });
     player.play(resource);
     isPlaying = true;
@@ -64,7 +65,7 @@ player.on('error', () => {
   playNext();
 });
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.user.setActivity('Hindi hits', { type: 2 });
 });
@@ -98,6 +99,7 @@ client.on('messageCreate', async (msg) => {
 
   if (cmd === '!skip') {
     if (!isPlaying) return msg.reply('Nothing playing.');
+    killProcess();
     player.stop();
     msg.reply('Skipped.');
   }
